@@ -3,10 +3,12 @@
 %[hit]=getFirstHit(P,Q, ndB, nndB)
 % P: matrix holding one ping per row
 % Q: acquisition data corresponding to the pings in P
+% nearF: near field in meters
 % ndB: boundary limit of the main lobe (below 5 m depth)
 % nndB: background noise limit
 % Note: ndB~30dB, according to the directivity function
-%  main/secondary lobe criterium; nndB~60dB (¿?)
+%  main/secondary lobe criterium; nndB~60dB (Â¿?)
+%%Version: 2024/02/24
 function [hit]=getFirstHit(P,Q,nearF, ndB, nndB)
 
  %near field index
