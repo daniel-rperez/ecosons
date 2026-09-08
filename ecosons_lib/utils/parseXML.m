@@ -15,6 +15,7 @@
 %  used only internally for recursive calls
 % tagE: position of txt where parsing has stopped (next character)
 %  used only internally for recursive calls
+%%Version: 2023/02/24
 function [xmlout, tagC, tagE]=parseXML(txt, xmlin, tagB)
   
   %straighten the text out (no newlines)
@@ -38,10 +39,14 @@ function [xmlout, tagC, tagE]=parseXML(txt, xmlin, tagB)
   while( p < length(txt) )
   
     %!
-    disp( [num2str(p) ' / ' num2str(length(txt))] )
-  
+    %disp( [num2str(p) ' / ' num2str(length(txt))] )
+    
     stxt=txt(p:min([p+1024, length(txt)]));
-  
+    try
+      regexp(stxt, '^.*$'); %!fails if stxt does not include complete utf-8 characters
+    catch
+      stxt=stxt(1:end-1);
+    end_try_catch
     %closing tag: return
     %[S,E]=regexp(txt(p:end), ['^</' xmlout.__name '\s*>'], 'once');
     [S,E]=regexp(stxt, ['^</' xmlout.__name '\s*>'], 'once');
