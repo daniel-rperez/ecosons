@@ -1,12 +1,18 @@
 %Reads a single-beam Simrad RAW sonar file into memory
-% [P HS PS At Al]=fmt_simradRAW(fname, channel, mxp)
+% [P HS PS At Al,W,filt]=fmt_simradRAW(fname)
 % P{}: channel cells with ping matrices: rows: ping no., columns: echo sample
 % HS: channel cells with transducer headers
 % PS: GPS + time data (time=-1: no data)
 % At, Al: athwart- and along-ship electrical angles
+% W: calibrated waveform
+% filt: filter coefficients (?)
 % fname: RAW file filename
+%%References:
 % RAW0: https://www.ngdc.noaa.gov/mgg/wcd/simradEK60manual.pdf
 % RAW3: https://www.kongsberg.com/globalassets/maritime/km-products/product-documents/413763_ea640_ref.pdf
+%%Version: 2026/01/26
+% Last change: default parameter values in case no <environment> in XML0
+% Last change: alpha returned as dB/m
 function [P,HS,PS,At,Al,W,filt]=fmt_simradRAW(fname)
 
  %Initialize returned values
@@ -45,7 +51,12 @@ function [P,HS,PS,At,Al,W,filt]=fmt_simradRAW(fname)
 
   while( ~feof(sonarFile) )
 
-   dgrm=readRawDatagram(sonarFile);
+   try
+     dgrm=readRawDatagram(sonarFile);
+   catch
+     warning(['Exception catched in ' fname])
+     break;
+   end_try_catch
 
    if( pass==1 )
 
@@ -113,10 +124,14 @@ function [P,HS,PS,At,Al,W,filt]=fmt_simradRAW(fname)
     switch(dgrm.type)
 
     case 'NME0'
-     llPS=gpsRead(dgrm.nmea);
-     if( llPS.time >=0 )
-      lPS=llPS;
-     endif
+     try
+      llPS=gpsRead(dgrm.nmea);
+      if( llPS.time >=0 )
+       lPS=llPS;
+      endif
+     catch
+      warning(['Error in NMEA datagram: ' dgrm.nmea])
+     end_try_catch
 
     case 'XML0'
 
@@ -180,6 +195,19 @@ function [P,HS,PS,At,Al,W,filt]=fmt_simradRAW(fname)
        lHS(ch).salinity=( salinity=str2num(dgrm.xml.Environment._Salinity) );
        lHS(ch).acidity=( acidity=str2num(dgrm.xml.Environment._Acidity) );
        %!!!disp(['f=' num2str(lHS(ch).frequency) ', T=' num2str(temperature) ', S=' num2str(salinity), ', D=' num2str(depth) ', pH=' num2str(acidity)])
+       if( isfield(lHS(ch), 'frequency') )
+        lHS(ch).absorptionCoefficient=alphaAinslieMcColm(lHS(ch).frequency,temperature,salinity,depth,acidity); %calculado a partir de la salinidad, el pH, la temperatura, ...
+       else
+        lHS(ch).absorptionCoefficient=0.0;
+       endif
+      endfor
+     elseif( ~isfield(lHS(end), 'soundVelocity') )
+      for ch=1:length(lChIds)
+       lHS(ch).transducerDepth=( depth=0 );
+       lHS(ch).soundVelocity=1500;
+       lHS(ch).temperature=( temperature=10 );
+       lHS(ch).salinity=( salinity=35 );
+       lHS(ch).acidity=( acidity=8 );
        if( isfield(lHS(ch), 'frequency') )
         lHS(ch).absorptionCoefficient=alphaAinslieMcColm(lHS(ch).frequency,temperature,salinity,depth,acidity); %calculado a partir de la salinidad, el pH, la temperatura, ...
        else
@@ -341,6 +369,7 @@ function lPS=gpsRead(nmea)
  lPS.longitude=0.0;
 
  if( length(nmea) > 5 )
+  %!!!disp(nmea(4:end))
   ss=strsplit(nmea(4:end), ',', 'collapsedelimiters', false);
   switch(ss{1})
 
@@ -576,7 +605,7 @@ function dgrm=readRawDatagram(sonarFile, ctx)
   dgrm.sample=samp;
   dgrm.data=dat;
 
-case 'FIL1'
+ case 'FIL1'
   dgrm.stage=fread(sonarFile, 1,'int16','ieee-le');
   fread(sonarFile, 1,'char'); %!!!spec says 2 chars!
   dgrm.filterType=fread(sonarFile, 1,'char');
@@ -626,6 +655,7 @@ function alpha=alphaAinslieMcColm(f,T,S,D,pH) %Ainslie & McColm, J. Acoust. Soc.
 
  %Total absorption (dB/km)
  alpha=(Boric+MgSO4+H2O);
+ alpha=alpha/1000; %dB/m
 
 endfunction
 
