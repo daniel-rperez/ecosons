@@ -1,20 +1,26 @@
 %[fW, f_sel, P, Pmf]=computeBBFrequency(HS, W, f_rep, useWtemplate, withCorrections, calXML)
-%
-%
-function [fW, f_sel, P, Pmf]=computeBBFrequency(HS, W, f_rep, useWtemplate, withCorrections, calXML)
+% HS: channel cells with transducer headers
+% W: calibrated waveform
+% f_rep:
+% useWtemplate:
+% withCorrections:
+% calXML:
+%%Version: 2025/09/17
+%%Modificacion: retornar hchirp_acr (para calcular longitud de pulso equivalente)
+function [fW, f_sel, P, Pmf, hchirp_acr]=computeBBFrequency(HS, W, f_rep, useWtemplate, withCorrections, calXML)
 
   pkg load signal
 
   %Pulse length (in seconds and in bins)
   dts=HS(1).sampleInterval;
   dT=HS(1).pulseLength;
-  ndT=round(dT / dts );
-  %!ndT=2*round(1 + dT / (2*dts) ); %generous length
+  %!ndT=round(dT / dts );
+  ndT=2*round(1 + dT / (2*dts) ); %generous length
 
   if( ~exist('useWtemplate') )
     useWtemplate=false;
   else
-    if( ~useWtemplate )
+    if( useWtemplate )
       error("Use of simulated template is not implemented")
     endif
   endif
@@ -25,6 +31,7 @@ function [fW, f_sel, P, Pmf]=computeBBFrequency(HS, W, f_rep, useWtemplate, with
 
   %Find center of chirp
   n_c=floor( sum( pchirp0 .* [1:length(pchirp0)] )/sum(pchirp0) );
+
   rchirp=floor(n_c-ndT):floor(n_c+ndT);
   rchirp=rchirp(0<rchirp);
 
@@ -33,9 +40,6 @@ function [fW, f_sel, P, Pmf]=computeBBFrequency(HS, W, f_rep, useWtemplate, with
 
   pow_scale=norm(hchirp)/norm(hchirp_acr); %to ensure energy conservation
   hchirp_acr=pow_scale*hchirp_acr;
-
-  %Maximum of the chirp transform: set as t=0 (before first sample)
-  [~,n_cc]=max(abs(conv(hchirp0, conj(hchirp(end:-1:1)), 'same')));
 
   %Time base
   t_chirp=[1:length(hchirp)]*HS(1).sampleInterval;
@@ -59,7 +63,7 @@ function [fW, f_sel, P, Pmf]=computeBBFrequency(HS, W, f_rep, useWtemplate, with
   endif
 
   if( exist('withCorrections') )
-    if( isbool(withCorrections) )
+    if( isbool(withCorrections) && withCorrections )
       withCorrections=40;
     endif
   else
@@ -117,12 +121,12 @@ function [fW, f_sel, P, Pmf]=computeBBFrequency(HS, W, f_rep, useWtemplate, with
   for nf=1:length(f_sel)
     w_f=wHann.*exp(-2i*pi*f_sel(nf)*t_chirp); %conjugated Fourier-Hann window!
     fC(nf)=hchirp_acr*w_f'; %Fourier component of the chirp autocorrelation (mind the traspose as it also conjugates)
-    fWnf=conv2(hsignal_uconv,w_f, 'same')/fC(nf); %Normalized Fourier transform of the matched filtered signal
+    fWnf=conv2(hsignal_uconv,w_f, 'same')/fC(nf); %Normalized Fourier transform of the matched filtered signal (time reversion is the same as conjugation)
     fW(nf,:)=(r_load+z_sel(nf))/((1000+75)*r_load) * fWnf(:); %Correct electrical load gain and apply calibration (mechanical) gain
   endfor
 
   %Cut and reflect
-  fW=fW(:,:,n_cc+1:end);
+  fW=fW(:,:,n_c:end);
 
   %Power by frequency
   if( nargout>=3 )
@@ -144,7 +148,7 @@ function [fW, f_sel, P, Pmf]=computeBBFrequency(HS, W, f_rep, useWtemplate, with
   endif
 
   if( nargout>=4 )
-    Pmf=10*log10( 0.5*power(abs(hsignal_uconv(:,n_cc+1:end)),2)/( z_mean * g_mean^2 ) ) ...
+    Pmf=10*log10( 0.5*power(abs(hsignal_uconv(:,n_c:end)),2)/( z_mean * g_mean^2 ) ) ...
        - 10*log10(pwEm*power(cw/(4*pi*f_mean),2)) ...
        + withCorrections*log10(0.5*[1:size(fW,3)]*cw*dts) ...
        - ea_mean;
