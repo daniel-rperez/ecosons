@@ -7,6 +7,7 @@
 % D: depth (as a proxy to pressure)
 % pH
 % alpha: total absorption coefficient in dB/km
+%%Version: 2026/09/10
 function alpha=alphaAinslieMcColm(f,T,S,D,pH)
  f=f/1000; %f in kHz
  D=D/1000; %D in km
@@ -33,6 +34,7 @@ function alpha=alphaAinslieMcColm(f,T,S,D,pH)
 
  %Total absorption (dB/km)
  alpha=(Boric+MgSO4+H2O);
+ alpha=alpha/1000; %dB/m
 
 endfunction
 
